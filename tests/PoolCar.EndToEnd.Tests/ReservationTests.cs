@@ -77,6 +77,30 @@ public class ReservationTests(PoolCarApp app) : EndToEndTest(app)
     }
 
     [Fact]
+    public async Task Changing_start_date_advances_end_date_and_keeps_availability_refreshing()
+    {
+        var tomorrow = DutchCalendar.Today.AddDays(1);
+        var dayAfterTomorrow = DutchCalendar.Today.AddDays(2);
+        await SignInAsync(SeededEmployees.Utrecht);
+        await NavigateToAsync("Reserveren", "Auto reserveren");
+
+        var from = Page.GetByLabel("Van", new() { Exact = true });
+        var to = Page.GetByLabel("Tot en met");
+        await from.FillAsync(DutchCalendar.Iso(tomorrow));
+
+        await Expect(from).ToHaveValueAsync(DutchCalendar.Iso(tomorrow));
+        await Expect(to).ToHaveValueAsync(DutchCalendar.Iso(tomorrow));
+        await Expect(Page).ToHaveURLAsync(new Regex($"van={DutchCalendar.Iso(tomorrow)}&tot={DutchCalendar.Iso(tomorrow)}"));
+        await Expect(Page.GetByRole(AriaRole.Alert)).ToHaveCountAsync(0);
+        await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Kies een categorie" })).ToBeVisibleAsync();
+
+        await to.FillAsync(DutchCalendar.Iso(dayAfterTomorrow));
+
+        await Expect(Page).ToHaveURLAsync(new Regex($"van={DutchCalendar.Iso(tomorrow)}&tot={DutchCalendar.Iso(dayAfterTomorrow)}"));
+        await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Kies een categorie" })).ToBeVisibleAsync();
+    }
+
+    [Fact]
     public async Task Reserving_a_taken_car_offers_a_comparable_car_to_reserve()
     {
         var tomorrow = DutchCalendar.Today.AddDays(1);

@@ -26,4 +26,5 @@ Follow the existing example of each pattern. Paths are relative to `src/PoolCar.
 | An unreachable API gives a `503` page that names the unavailable part, or a toast for a partial swap. | `Outages/ServiceUnavailableMiddleware.cs`, `wwwroot/js/site.js` |
 | A failed antiforgery check is shown as an expired page: `ExpiredFormFilter` marks it, `/fout/400` shows a reload link or toast, and `site.js` swaps only 400s with `X-PoolCar-Expired`. | `ExpiredForms/ExpiredFormFilter.cs`, `Pages/Fout.cshtml` |
 | Polling uses `hx-trigger="every 30s"` with `hx-sync`. | `Pages/_BalieBoard.cshtml` |
+| Changing a reservation start date advances an earlier end date to match, keeping the reactive availability refresh valid. | `Pages/Reserveren.cshtml`, `wwwroot/js/site.js` |
 | `hx-boost` and the antiforgery `RequestVerificationToken` header are set on `<body>`. | `Pages/Shared/_Layout.cshtml` |
