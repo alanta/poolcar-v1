@@ -7,6 +7,20 @@ htmx.config.responseHandling = [
     { code: "...", swap: false },
 ];
 
+document.addEventListener("change", (event) => {
+    const from = event.target;
+    const to = document.getElementById("tot");
+    if (!(from instanceof HTMLInputElement) || from.id !== "van" || !(to instanceof HTMLInputElement)) {
+        return;
+    }
+
+    to.min = from.value;
+    if (to.value && to.value < from.value) {
+        to.value = from.value;
+        to.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+});
+
 // A backend service is unavailable, or the page expired because its form token is no longer valid: show the app's
 // own error page, or only a toast for a partial swap. Other 503 responses, for example from the ingress during a
 // restart, and other 400 responses are not swapped.

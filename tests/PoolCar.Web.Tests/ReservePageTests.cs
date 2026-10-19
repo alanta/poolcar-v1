@@ -160,6 +160,16 @@ public partial class ReservePageTests(WebApplicationFactory<Program> factory) : 
     }
 
     [Fact]
+    public async Task DateForm_RefreshesAvailabilityOnChange()
+    {
+        using var client = CreateClient();
+
+        var html = await client.GetStringAsync("/reserveren", Token);
+
+        html.ShouldContain("hx-trigger=\"change delay:300ms, submit\"");
+    }
+
+    [Fact]
     public async Task HtmxRequest_GetsOnlyTheSteps()
     {
         using var client = CreateClient();
