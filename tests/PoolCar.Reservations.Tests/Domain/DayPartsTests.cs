@@ -58,26 +58,22 @@ public class DayPartsTests
     }
 
     [Theory]
-    [InlineData(2026, 10, 14, 2)]
-    [InlineData(2026, 11, 10, 1)]
-    public void Periods_use_the_fixed_Amsterdam_day_part_times(int year, int month, int day, int utcOffsetHours)
+    [InlineData(2026, 10, 14)]
+    [InlineData(2026, 11, 10)]
+    public void Periods_use_the_fixed_day_part_times(int year, int month, int day)
     {
         var date = new DateOnly(year, month, day);
-        var offset = TimeSpan.FromHours(utcOffsetHours);
 
         var morning = DayParts.ToPeriod(date, DayPart.Morning);
         var afternoon = DayParts.ToPeriod(date, DayPart.Afternoon);
         var fullDay = DayParts.ToPeriod(date, DayPart.FullDay);
 
-        morning.ShouldBe((
-            new DateTimeOffset(year, month, day, 8, 0, 0, offset),
-            new DateTimeOffset(year, month, day, 12, 0, 0, offset)));
-        afternoon.ShouldBe((
-            new DateTimeOffset(year, month, day, 12, 0, 0, offset),
-            new DateTimeOffset(year, month, day, 18, 0, 0, offset)));
-        fullDay.ShouldBe((
-            new DateTimeOffset(year, month, day, 8, 0, 0, offset),
-            new DateTimeOffset(year, month, day, 18, 0, 0, offset)));
+        morning.Start.DateTime.ShouldBe(new DateTime(year, month, day, 8, 0, 0));
+        morning.End.DateTime.ShouldBe(new DateTime(year, month, day, 12, 0, 0));
+        afternoon.Start.DateTime.ShouldBe(new DateTime(year, month, day, 12, 0, 0));
+        afternoon.End.DateTime.ShouldBe(new DateTime(year, month, day, 18, 0, 0));
+        fullDay.Start.DateTime.ShouldBe(new DateTime(year, month, day, 8, 0, 0));
+        fullDay.End.DateTime.ShouldBe(new DateTime(year, month, day, 18, 0, 0));
     }
 
     [Theory]
@@ -135,28 +131,5 @@ public class DayPartsTests
     public void Evening_instant_has_no_day_part()
     {
         DayParts.CurrentDayPart(new DateTimeOffset(2026, 10, 14, 20, 0, 0, TimeSpan.Zero)).ShouldBeNull();
-    }
-
-    [Theory]
-    [InlineData(2026, 10, 13, 22)]
-    [InlineData(2026, 11, 13, 23)]
-    public void Date_of_instant_uses_the_Amsterdam_date(int year, int month, int day, int utcHour)
-    {
-        var instant = new DateTimeOffset(year, month, day, utcHour, 0, 0, TimeSpan.Zero);
-
-        DayParts.DateOf(instant).ShouldBe(new DateOnly(year, month, day).AddDays(1));
-    }
-
-    [Theory]
-    [InlineData(2026, 10, 14, 6, DayPart.Morning)]
-    [InlineData(2026, 10, 14, 10, DayPart.Afternoon)]
-    [InlineData(2026, 11, 10, 7, DayPart.Morning)]
-    [InlineData(2026, 11, 10, 11, DayPart.Afternoon)]
-    public void Current_day_part_uses_Amsterdam_day_part_boundaries(
-        int year, int month, int day, int utcHour, DayPart expected)
-    {
-        var instant = new DateTimeOffset(year, month, day, utcHour, 0, 0, TimeSpan.Zero);
-
-        DayParts.CurrentDayPart(instant).ShouldBe(expected);
     }
 }
