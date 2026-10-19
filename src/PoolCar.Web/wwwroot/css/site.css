@@ -379,6 +379,9 @@ fieldset { margin: 0; padding: 0; border: 0; }
 .reserve-details dd { margin: 0; font-weight: 600; }
 .reserve-done { max-width: 40rem; border-left: 6px solid var(--color-success); }
 .reserve-conflict { max-width: 40rem; border-left: 6px solid var(--color-red-500); }
+.reserve-alternatives { display: grid; gap: 0.5rem; margin: 0 0 1rem; padding: 0; list-style: none; }
+.reserve-alternatives li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; padding: 0.75rem 0; border-top: 1px solid var(--color-grey-200); }
+.reserve-alternative-car { display: grid; gap: 0.25rem; }
 @media (max-width: 720px) {
     .reserve-when { padding: 1rem; }
     .reserve-when .form-row .form-field { flex: 1 1 100%; max-width: none; }

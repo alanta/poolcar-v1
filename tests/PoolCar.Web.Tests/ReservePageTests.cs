@@ -27,6 +27,24 @@ public partial class ReservePageTests(WebApplicationFactory<Program> factory) : 
          "colour":"Geel","seats":4,"rangeKm":400,"powerKw":110,"firstRegistration":"2025-01-01","listPrice":null}
         """;
 
+    // Comparable to the Niro (middel, Utrecht, 460 km): another Niro, two longer-range cars, a busy one and a shorter-range one
+    private const string MiddelCarsJson = """
+        [{"plate":"HPN72V","make":"Kia","model":"Niro","variant":"EV","category":"middel","office":"utrecht",
+          "colour":"Grijs","seats":5,"rangeKm":460,"powerKw":150,"firstRegistration":"2024-03-01","listPrice":null},
+         {"plate":"NIRO02","make":"Kia","model":"Niro","variant":"EV","category":"middel","office":"utrecht",
+          "colour":"Wit","seats":5,"rangeKm":440,"powerKw":150,"firstRegistration":"2024-03-01","listPrice":null},
+         {"plate":"VOLVO1","make":"Volvo","model":"EX30","variant":"","category":"middel","office":"utrecht",
+          "colour":"Grijs","seats":5,"rangeKm":480,"powerKw":200,"firstRegistration":"2024-06-01","listPrice":null},
+         {"plate":"SKODA1","make":"Skoda","model":"Enyaq","variant":"","category":"middel","office":"utrecht",
+          "colour":"Blauw","seats":5,"rangeKm":470,"powerKw":150,"firstRegistration":"2024-06-01","listPrice":null},
+         {"plate":"BUSY01","make":"Tesla","model":"Model 3","variant":"","category":"middel","office":"utrecht",
+          "colour":"Zwart","seats":5,"rangeKm":600,"powerKw":250,"firstRegistration":"2024-06-01","listPrice":null},
+         {"plate":"SHORT1","make":"Opel","model":"Astra","variant":"","category":"middel","office":"utrecht",
+          "colour":"Rood","seats":5,"rangeKm":300,"powerKw":110,"firstRegistration":"2024-06-01","listPrice":null},
+         {"plate":"AA11BB","make":"Renault","model":"5","variant":"E-Tech","category":"klein","office":"utrecht",
+          "colour":"Geel","seats":4,"rangeKm":400,"powerKw":110,"firstRegistration":"2025-01-01","listPrice":null}]
+        """;
+
     private const string ReservationId = "11111111-1111-1111-1111-111111111111";
 
     // 11:00 in Amsterdam on Tuesday 13 October 2026
@@ -259,6 +277,8 @@ public partial class ReservePageTests(WebApplicationFactory<Program> factory) : 
         html.ShouldNotContain("AA-11-BB");
         html.ShouldContain("CC-22-DD");
         html.ShouldContain("href=\"/reserveren?vestiging=utrecht&van=2026-10-14&tot=2026-10-14&dagdeel=ochtend&categorie=klein\"");
+        ConflictHtml(html).ShouldContain("Vergelijkbare auto's die wel vrij zijn");
+        ConflictHtml(html).ShouldContain("href=\"/reserveren?vestiging=utrecht&van=2026-10-14&tot=2026-10-14&dagdeel=ochtend&categorie=klein&auto=CC22DD\"");
     }
 
     [Fact]
@@ -277,6 +297,25 @@ public partial class ReservePageTests(WebApplicationFactory<Program> factory) : 
         html.ShouldContain("<a class=\"button button-dark\" href=\"/reserveren?vestiging=utrecht&van=2026-10-14&tot=2026-10-14&dagdeel=ochtend\">Kies een andere auto</a>");
         html.ShouldNotContain("Kies een categorie");
         html.ShouldNotContain("Reserveer <span");
+        html.ShouldNotContain("Vergelijkbare auto's");
+    }
+
+    [Fact]
+    public async Task Conflict_WhilePostingPreselectedCar_OffersComparableCars()
+    {
+        _fleet.OnJson(HttpMethod.Get, "/cars", MiddelCarsJson);
+        _reservations.On(HttpMethod.Post, "/reservations", _ => Conflict409());
+        using var client = CreateClient();
+        await AddTokenAsync(client);
+        client.DefaultRequestHeaders.Add("HX-Request", "true");
+
+        using var response = await PostReserveAsync(client, null, "HPN72V");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var conflict = ConflictHtml(WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync(Token)));
+        conflict.ShouldContain("Deze auto is net door iemand anders gereserveerd voor wo 14 oktober.");
+        conflict.ShouldContain("href=\"/reserveren?vestiging=utrecht&van=2026-10-14&tot=2026-10-14&dagdeel=ochtend&auto=NIRO02\"");
+        conflict.ShouldNotContain("HPN-72-V");
     }
 
     [Fact]
@@ -312,6 +351,47 @@ public partial class ReservePageTests(WebApplicationFactory<Program> factory) : 
         html.ShouldContain("Deze auto is al gereserveerd voor do 15 oktober.");
         html.ShouldContain("href=\"/reserveren?vestiging=utrecht&van=2026-10-14&tot=2026-10-16&dagdeel=hele-dag\">Kies een andere auto</a>");
         html.ShouldNotContain("Bevestig je reservering");
+        html.ShouldNotContain("Vergelijkbare auto's");
+    }
+
+    [Fact]
+    public async Task PreselectedCar_ThatIsTaken_OffersThreeComparableCars_SameModelFirst()
+    {
+        _fleet.OnJson(HttpMethod.Get, "/cars", MiddelCarsJson);
+        Busy("HPN72V", "BUSY01");
+        using var client = CreateClient();
+
+        var html = WebUtility.HtmlDecode(await client.GetStringAsync(
+            "/reserveren?auto=HPN72V&vestiging=utrecht&van=2026-10-14&tot=2026-10-16&dagdeel=hele-dag",
+            Token));
+
+        var conflict = ConflictHtml(html);
+        conflict.ShouldContain("<h3 id=\"vergelijkbare-autos\">Vergelijkbare auto's die wel vrij zijn</h3>");
+        conflict.ShouldContain("Kia Niro");
+        conflict.ShouldContain("href=\"/reserveren?vestiging=utrecht&van=2026-10-14&tot=2026-10-16&dagdeel=hele-dag&auto=NIRO02\"");
+        conflict.IndexOf("auto=NIRO02", StringComparison.Ordinal).ShouldBeLessThan(conflict.IndexOf("auto=VOLVO1", StringComparison.Ordinal));
+        conflict.IndexOf("auto=VOLVO1", StringComparison.Ordinal).ShouldBeLessThan(conflict.IndexOf("auto=SKODA1", StringComparison.Ordinal));
+        conflict.ShouldNotContain("auto=SHORT1");
+        conflict.ShouldNotContain("auto=BUSY01");
+        conflict.ShouldNotContain("auto=AA11BB");
+    }
+
+    [Fact]
+    public async Task PreselectedCar_ThatIsTaken_WithoutAvailability_ShowsConflictWithoutAlternatives()
+    {
+        var calls = 0;
+        _reservations.On(HttpMethod.Post, "/availability/busy", _ => ++calls == 1
+            ? StubHttpHandler.Json("""{"carIds":["HPN72V"]}""")
+            : StubHttpHandler.Problem(HttpStatusCode.UnprocessableEntity, "invalid", "Kies een dagdeel."));
+        using var client = CreateClient();
+
+        using var response = await client.GetAsync("/reserveren?auto=HPN72V&van=2026-10-14&dagdeel=ochtend", Token);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var html = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync(Token));
+        html.ShouldContain("Deze auto is niet vrij in deze periode.");
+        html.ShouldNotContain("Vergelijkbare auto's");
+        html.ShouldNotContain("class=\"form-error\"");
     }
 
     [Fact]
@@ -353,6 +433,13 @@ public partial class ReservePageTests(WebApplicationFactory<Program> factory) : 
 
         html.ShouldContain("Geen auto met kenteken XX-99-XX gevonden. Kies hieronder een auto.");
         html.ShouldContain("Kies een categorie");
+    }
+
+    private static string ConflictHtml(string html)
+    {
+        var start = html.IndexOf("class=\"section card reserve-conflict\"", StringComparison.Ordinal);
+        start.ShouldBeGreaterThanOrEqualTo(0);
+        return html[start..html.IndexOf("</section>", start, StringComparison.Ordinal)];
     }
 
     private void Busy(params string[] plates) =>
