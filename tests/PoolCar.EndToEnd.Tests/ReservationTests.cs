@@ -99,7 +99,7 @@ public class ReservationTests(PoolCarApp app) : EndToEndTest(app)
         await Expect(Page).ToHaveURLAsync(new Regex($"van={DutchCalendar.Iso(tomorrow)}&tot={DutchCalendar.Iso(dayAfterTomorrow)}"));
         await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Kies een categorie" })).ToBeVisibleAsync();
     }
-  
+
     [Fact]
     public async Task Reserving_a_taken_car_offers_a_comparable_car_to_reserve()
     {
