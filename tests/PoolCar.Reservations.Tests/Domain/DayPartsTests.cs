@@ -58,6 +58,25 @@ public class DayPartsTests
     }
 
     [Theory]
+    [InlineData(2026, 10, 14)]
+    [InlineData(2026, 11, 10)]
+    public void Periods_use_the_fixed_day_part_times(int year, int month, int day)
+    {
+        var date = new DateOnly(year, month, day);
+
+        var morning = DayParts.ToPeriod(date, DayPart.Morning);
+        var afternoon = DayParts.ToPeriod(date, DayPart.Afternoon);
+        var fullDay = DayParts.ToPeriod(date, DayPart.FullDay);
+
+        morning.Start.DateTime.ShouldBe(new DateTime(year, month, day, 8, 0, 0));
+        morning.End.DateTime.ShouldBe(new DateTime(year, month, day, 12, 0, 0));
+        afternoon.Start.DateTime.ShouldBe(new DateTime(year, month, day, 12, 0, 0));
+        afternoon.End.DateTime.ShouldBe(new DateTime(year, month, day, 18, 0, 0));
+        fullDay.Start.DateTime.ShouldBe(new DateTime(year, month, day, 8, 0, 0));
+        fullDay.End.DateTime.ShouldBe(new DateTime(year, month, day, 18, 0, 0));
+    }
+
+    [Theory]
     [InlineData(DayPart.Morning)]
     [InlineData(DayPart.Afternoon)]
     [InlineData(DayPart.FullDay)]
