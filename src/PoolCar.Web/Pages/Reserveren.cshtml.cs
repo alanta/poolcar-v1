@@ -92,6 +92,8 @@ public class ReserverenModel(
 
     public int HiddenCarCount { get; private set; }
 
+    private IReadOnlyList<FleetCar>? _freeInCategory;
+
     public ReservationConflict? Conflict { get; private set; }
 
     public ReservationConfirmation? Confirmation { get; private set; }
@@ -155,7 +157,8 @@ public class ReserverenModel(
         {
             // Reload the list, so it shows the cars that are still free, and replace the confirmation by the conflict
             await LoadAsync(cancellationToken);
-            Conflict = ReservationConflict.Taken(result.Problem, CategoryStepUrl);
+            var alternatives = Conflict?.Alternatives ?? await FindAlternativesAsync(car, cancellationToken);
+            Conflict = ReservationConflict.Taken(result.Problem, CategoryStepUrl, alternatives);
             SelectedCar = null;
             return StepsOrPage(StatusCodes.Status409Conflict);
         }
@@ -205,6 +208,7 @@ public class ReserverenModel(
 
     private async Task LoadAsync(CancellationToken cancellationToken)
     {
+        _freeInCategory = null;
         await currentEmployee.LoadAsync(cancellationToken);
         Offices = await officeDirectory.GetOfficesAsync(cancellationToken);
         Today = AmsterdamTime.Today(timeProvider);
@@ -247,6 +251,7 @@ public class ReserverenModel(
             .OrderByDescending(c => c.RangeKm)
             .ThenBy(c => c.Plate, StringComparer.Ordinal)
             .ToList();
+        _freeInCategory = free;
         var visible = ShowAll || free.Count <= VisibleCars ? free : free.Take(VisibleCars).ToList();
         HiddenCarCount = free.Count - visible.Count;
         Cars = [.. visible.Select(c => new CarCard(c, StepUrl(plate: c.Plate), c.Plate == car?.Plate))];
@@ -263,7 +268,8 @@ public class ReserverenModel(
         }
         else
         {
-            Conflict = await ReservationConflict.BusyAsync(car, From, To, DayPart, reservationsApiClient, CategoryStepUrl, cancellationToken);
+            Conflict = await ReservationConflict.BusyAsync(
+                car, From, To, DayPart, reservationsApiClient, CategoryStepUrl, Alternatives(car, free), cancellationToken);
         }
     }
 
@@ -315,12 +321,32 @@ public class ReserverenModel(
 
         if (busy.Value.Contains(car.Plate, StringComparer.OrdinalIgnoreCase))
         {
-            Conflict = await ReservationConflict.BusyAsync(car, From, To, DayPart, reservationsApiClient, CategoryStepUrl, cancellationToken);
+            var alternatives = await FindAlternativesAsync(car, cancellationToken);
+            Conflict = await ReservationConflict.BusyAsync(
+                car, From, To, DayPart, reservationsApiClient, CategoryStepUrl, alternatives, cancellationToken);
             return;
         }
 
         SelectedCar = car;
     }
+
+    /// <summary>Comparable cars that are free for the request, from the loaded car list or else from the cars of the
+    /// same category and office. Without availability there are no alternatives; the conflict still shows.</summary>
+    private async Task<IReadOnlyList<CarCard>> FindAlternativesAsync(FleetCar car, CancellationToken cancellationToken)
+    {
+        if (_freeInCategory is { } free)
+        {
+            return Alternatives(car, free);
+        }
+
+        var availability = await availabilityService.GetAvailableAsync(
+            new AvailabilityRequest(car.Office, From, To, DayPart, car.Category),
+            cancellationToken);
+        return availability.IsSuccess ? Alternatives(car, availability.Value.Cars) : [];
+    }
+
+    private IReadOnlyList<CarCard> Alternatives(FleetCar car, IEnumerable<FleetCar> free) =>
+        [.. ComparableCars.Rank(car, free).Select(c => new CarCard(c, StepUrl(plate: c.Plate), false))];
 
     private bool LoadDates()
     {
@@ -428,16 +454,24 @@ public class ReserverenModel(
     public sealed record ReservationConfirmation(string CarName, string Plate, string Summary, string NextStep);
 }
 
-/// <summary>A car that can't be reserved for the request, because it was taken before or while posting.</summary>
-public sealed record ReservationConflict(string Message, string OtherCarsUrl)
+/// <summary>A car that can't be reserved for the request, because it was taken before or while posting, with up to
+/// <see cref="ComparableCars.MaxSuggestions"/> comparable cars that are free.</summary>
+public sealed record ReservationConflict(
+    string Message,
+    string OtherCarsUrl,
+    IReadOnlyList<ReserverenModel.CarCard> Alternatives)
 {
     /// <summary>The car was taken while posting: Reservations returned 409.</summary>
-    public static ReservationConflict Taken(ApiProblem problem, string otherCarsUrl) =>
+    public static ReservationConflict Taken(
+        ApiProblem problem,
+        string otherCarsUrl,
+        IReadOnlyList<ReserverenModel.CarCard> alternatives) =>
         new(
             problem.ConflictingDates.Count > 0
                 ? $"Deze auto is net door iemand anders gereserveerd voor {ReservationDates.List(problem.ConflictingDates)}."
                 : problem.Detail,
-            otherCarsUrl);
+            otherCarsUrl,
+            alternatives);
 
     /// <summary>The car is not free for the request; names the dates from its schedule.</summary>
     public static async Task<ReservationConflict> BusyAsync(
@@ -447,6 +481,7 @@ public sealed record ReservationConflict(string Message, string OtherCarsUrl)
         DayPart dayPart,
         ReservationsApiClient reservationsApiClient,
         string otherCarsUrl,
+        IReadOnlyList<ReserverenModel.CarCard> alternatives,
         CancellationToken cancellationToken)
     {
         var schedule = await reservationsApiClient.GetScheduleAsync([car.Plate], from, to, cancellationToken);
@@ -459,6 +494,7 @@ public sealed record ReservationConflict(string Message, string OtherCarsUrl)
             dates.Count > 0
                 ? $"Deze auto is al gereserveerd voor {ReservationDates.List(dates)}."
                 : "Deze auto is niet vrij in deze periode.",
-            otherCarsUrl);
+            otherCarsUrl,
+            alternatives);
     }
 }

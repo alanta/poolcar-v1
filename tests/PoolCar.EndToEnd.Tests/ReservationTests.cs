@@ -99,6 +99,30 @@ public class ReservationTests(PoolCarApp app) : EndToEndTest(app)
         await Expect(Page).ToHaveURLAsync(new Regex($"van={DutchCalendar.Iso(tomorrow)}&tot={DutchCalendar.Iso(dayAfterTomorrow)}"));
         await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "Kies een categorie" })).ToBeVisibleAsync();
     }
+  
+    [Fact]
+    public async Task Reserving_a_taken_car_offers_a_comparable_car_to_reserve()
+    {
+        var tomorrow = DutchCalendar.Today.AddDays(1);
+        await SignInAsync(SeededEmployees.Utrecht);
+
+        await Page.GotoAsync($"/auto/{TakenCarPlate}");
+        await Page.GetByRole(AriaRole.Link, new() { Name = "Reserveer deze auto" }).First.ClickAsync();
+        await ChooseDatesAsync(tomorrow, "Ochtend");
+
+        var conflict = Page.GetByRole(AriaRole.Alert).Filter(new() { HasText = "Deze auto is niet vrij" });
+        var alternatives = conflict.GetByRole(AriaRole.List, new() { Name = "Vergelijkbare auto's die wel vrij zijn" });
+        var firstAlternative = alternatives.GetByRole(AriaRole.Link).First;
+        await Expect(firstAlternative).ToBeVisibleAsync();
+        var plate = PlateIn(await firstAlternative.TextContentAsync());
+        plate.ShouldNotBe("KSP-73-B");
+        await firstAlternative.ClickAsync();
+
+        var confirmation = Page.GetByRole(AriaRole.Region, new() { Name = "Bevestig je reservering" });
+        await Expect(confirmation).ToContainTextAsync(plate);
+        await Expect(confirmation).ToContainTextAsync(DutchCalendar.Short(tomorrow));
+        await Expect(confirmation).ToContainTextAsync("Utrecht");
+    }
 
     private async Task ChooseDatesAsync(DateOnly date, string dayPart)
     {

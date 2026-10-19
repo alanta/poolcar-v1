@@ -1,7 +1,27 @@
 @model ReservationConflict
-@* The car can't be reserved: it was taken before posting or while posting (409). Used for a preselected car and for a car chosen from the list. *@
+@using PoolCar.Web.Formatting
+@* The car can't be reserved: it was taken before posting or while posting (409). Used for a preselected car and for a car chosen from the list. Offers comparable cars that are free. *@
 <section class="section card reserve-conflict" role="alert" aria-labelledby="stap-conflict">
     <h2 id="stap-conflict" tabindex="-1" autofocus="@(ViewData["Autofocus"] is true)">Deze auto is niet vrij</h2>
     <p>@Model.Message</p>
+    @if (Model.Alternatives.Count > 0)
+    {
+        <h3 id="vergelijkbare-autos">Vergelijkbare auto's die wel vrij zijn</h3>
+        <ul class="reserve-alternatives" aria-labelledby="vergelijkbare-autos">
+            @foreach (var card in Model.Alternatives)
+            {
+                var car = card.Car;
+                <li>
+                    <span class="reserve-alternative-car">
+                        <span class="card-title">@car.Make @car.Model</span>
+                        <span class="plate">@LicensePlate.Format(car.Plate)</span>
+                        <span class="card-meta">@car.Colour · @car.RangeKm km bereik · @car.Seats zitplaatsen</span>
+                    </span>
+                    <a class="button button-small" href="@card.ChooseUrl"
+                       hx-get="@card.ChooseUrl" hx-target="#reserve-steps" hx-push-url="true">Kies<span class="visually-hidden"> @car.Make @car.Model @LicensePlate.Format(car.Plate)</span></a>
+                </li>
+            }
+        </ul>
+    }
     <a class="button button-dark" href="@Model.OtherCarsUrl">Kies een andere auto</a>
 </section>
